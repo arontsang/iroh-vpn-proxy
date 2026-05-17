@@ -1,16 +1,19 @@
 pub mod support;
 pub mod tunnel;
-pub mod client;
 
+use std::net::SocketAddr;
 use std::sync::Arc;
 use anyhow::Result;
 use quinn::crypto::rustls::QuicServerConfig;
 use quinn::{rustls, Incoming, Runtime, TokioRuntime};
-use crate::support::TokioIo;
+use crate::support::{get_value_from_env, TokioIo};
 use crate::tunnel::handle_proxy_request;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
+
+
+
     let rcgen::CertifiedKey { cert, signing_key } =
         rcgen::generate_simple_self_signed(vec!["localhost".into()])?;
     let cert = cert.der().clone();
@@ -28,7 +31,11 @@ async fn main() -> Result<()> {
 
     let endpoint_config = quinn::EndpointConfig::default();
 
-    let socket = std::net::UdpSocket::bind("0.0.0.0:0")?;
+
+    let port = get_value_from_env("QUIC_PORT").unwrap_or(0);
+    let endpoint = SocketAddr::from(([0,0,0,0], port));
+
+    let socket = std::net::UdpSocket::bind(endpoint)?;
 
     println!("Listening on {}", socket.local_addr()?);
 
