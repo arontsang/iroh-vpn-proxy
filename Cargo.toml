@@ -3,4 +3,20 @@ name = "stun-quic-proxy"
 version = "0.1.0"
 edition = "2024"
 
+
+[[bin]]
+name = "server"
+path = "src/server.rs"
+
 [dependencies]
+anyhow = "1.0.102"
+bytes = "1.11.1"
+http = "1.4.0"
+http-body-util = "0.1.3"
+hyper = { version = "1.9.0", features = ["client", "http1", "server"] }
+pin-project-lite = "0.2.17"
+quinn = "0.11.9"
+rcgen = "0.14.8"
+rustls = "0.23.40"
+tokio = { version = "1.52.3", features = ["io-util", "macros", "rt"] }
+
