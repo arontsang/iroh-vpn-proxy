@@ -1270,6 +1270,7 @@ dependencies = [
  "http",
  "http-body-util",
  "hyper",
+ "lazy_static",
  "pin-project-lite",
  "quinn",
  "rcgen",

@@ -6,10 +6,11 @@ use std::pin::Pin;
 use std::sync::{Arc, RwLock};
 use std::task::{Context, Poll};
 use std::time::Duration;
-use futures::future::{AbortHandle, Abortable} ;
+use futures::future::{AbortHandle, Abortable};
 use quinn::{AsyncUdpSocket, Runtime, UdpPoller};
 use quinn::udp::{RecvMeta, Transmit};
 use stun::message::Getter;
+use lazy_static::lazy_static;
 
 pub struct StunSocket {
     socket: Arc<dyn AsyncUdpSocket + Send + Sync>,
@@ -23,13 +24,20 @@ impl Drop for StunSocket {
     }
 }
 
-
+lazy_static! {
+    static ref DEFAULT_STUN_SERVER: SocketAddr = SocketAddr::from(([74, 125, 250, 129], 19302));
+}
 impl StunSocket {
     pub(crate) fn new(socket_addr: SocketAddr, runtime: Arc<dyn Runtime>) -> anyhow::Result<Self> {
         let socket = std::net::UdpSocket::bind(socket_addr)?;
         let socket = runtime.wrap_udp_socket(socket)?;
 
         let (abort_handle, abort_registration) = AbortHandle::new_pair();
+        
+        let stun_server = std::env::var("STUN_SERVER")
+            .ok()
+            .and_then(|s| s.parse::<SocketAddr>().ok())
+            .unwrap_or(*DEFAULT_STUN_SERVER);
 
         let stun_server_poller = Abortable::new({
             let socket = socket.clone();
@@ -45,7 +53,7 @@ impl StunSocket {
                     ]).unwrap();
 
                     let request = Transmit {
-                        destination: SocketAddr::from(([74, 125, 250, 129], 19302)),
+                        destination: stun_server,
                         ecn: None,
                         contents: request.raw.as_slice(),
                         segment_size: None,
