@@ -14,8 +14,17 @@ use crate::tunnel::handle_proxy_request;
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
 
+    let _socket = run_quic_proxy().await?;
 
 
+    loop {
+        tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
+    }
+
+    Ok(())
+}
+
+async fn run_quic_proxy() -> Result<Arc<StunSocket>> {
     let rcgen::CertifiedKey { cert, signing_key } =
         rcgen::generate_simple_self_signed(vec!["localhost".into()])?;
     let cert = cert.der().clone();
@@ -46,17 +55,19 @@ async fn main() -> Result<()> {
     let endpoint = quinn::Endpoint::new_with_abstract_socket(
         endpoint_config,
         Some(server_config),
-        socket,
-        runtime
+        socket.clone(),
+        runtime.clone()
     )?;
 
-    while let Some(conn) = endpoint.accept().await {
-        tokio::spawn(async move {
-            handle_quic_connection(conn).await.ok();
-        });
-    }
+    runtime.spawn(Box::pin(async move {
+        while let Some(conn) = endpoint.accept().await {
+            tokio::spawn(async move {
+                handle_quic_connection(conn).await.ok();
+            });
+        }
+    }));
 
-    Ok(())
+    Ok(socket)
 }
 
 async fn handle_quic_connection(conn: Incoming) -> Result<()> {
