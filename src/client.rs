@@ -36,9 +36,9 @@ async fn main() -> Result<()> {
 
         loop {
             let (mut incoming, _) = socket.accept().await?;
+            let (send, recv) = connection.open_bi().await?;
             tokio::spawn(async move {
 
-                let (send, recv) = connection.open_bi().await.unwrap();
                 let mut upstream = tokio::io::join(recv, send);
                 tokio::io::copy_bidirectional(&mut incoming, &mut upstream).await.ok();
             });

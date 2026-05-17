@@ -1,3 +1,4 @@
+pub mod stun;
 pub mod support;
 pub mod tunnel;
 
@@ -5,7 +6,8 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use anyhow::Result;
 use quinn::crypto::rustls::QuicServerConfig;
-use quinn::{rustls, Incoming, Runtime, TokioRuntime};
+use quinn::{rustls, AsyncUdpSocket, Incoming, Runtime, TokioRuntime};
+use crate::stun::StunSocket;
 use crate::support::{get_value_from_env, TokioIo};
 use crate::tunnel::handle_proxy_request;
 
@@ -35,12 +37,12 @@ async fn main() -> Result<()> {
     let port = get_value_from_env("QUIC_PORT").unwrap_or(0);
     let endpoint = SocketAddr::from(([0,0,0,0], port));
 
-    let socket = std::net::UdpSocket::bind(endpoint)?;
+    let runtime = Arc::new(TokioRuntime);
+    let socket = StunSocket::new(endpoint, runtime.clone())?;
 
     println!("Listening on {}", socket.local_addr()?);
 
-    let runtime = Arc::new(TokioRuntime);
-    let socket = runtime.wrap_udp_socket(socket)?;
+    let socket = Arc::new(socket);
     let endpoint = quinn::Endpoint::new_with_abstract_socket(
         endpoint_config,
         Some(server_config),
