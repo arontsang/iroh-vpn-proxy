@@ -1,5 +1,6 @@
 pub mod support;
 pub mod tunnel;
+pub mod client;
 
 use std::sync::Arc;
 use anyhow::Result;
