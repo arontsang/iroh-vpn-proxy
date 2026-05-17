@@ -137,4 +137,16 @@ impl AsyncUdpSocket for StunSocket {
         }
         self.socket.local_addr()
     }
+
+    fn max_transmit_segments(&self) -> usize {
+        self.socket.max_transmit_segments()
+    }
+
+    fn max_receive_segments(&self) -> usize {
+        self.socket.max_receive_segments()
+    }
+
+    fn may_fragment(&self) -> bool {
+        self.socket.may_fragment()
+    }
 }
