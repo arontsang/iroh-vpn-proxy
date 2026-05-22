@@ -1,6 +1,7 @@
 pub mod stun;
 pub mod support;
 pub mod tunnel;
+mod web;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -10,16 +11,13 @@ use quinn::{rustls, AsyncUdpSocket, Incoming, Runtime, TokioRuntime};
 use crate::stun::StunSocket;
 use crate::support::{get_value_from_env, TokioIo};
 use crate::tunnel::handle_proxy_request;
+use crate::web::handle_web_request;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
 
-    let _socket = run_quic_proxy().await?;
-
-
-    loop {
-        tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
-    }
+    let socket = run_quic_proxy().await?;
+    handle_web_request(socket).await?;
 
     Ok(())
 }

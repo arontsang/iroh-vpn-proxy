@@ -1,5 +1,6 @@
 use std::fmt::{Debug, Formatter};
 use std::future::poll_fn;
+use std::io;
 use std::io::IoSliceMut;
 use std::net::SocketAddr;
 use std::pin::Pin;
@@ -28,6 +29,14 @@ lazy_static! {
     static ref DEFAULT_STUN_SERVER: SocketAddr = SocketAddr::from(([74, 125, 250, 129], 19302));
 }
 impl StunSocket {
+
+    pub fn stun_addr(&self) -> Option<SocketAddr> {
+        if let Ok(guard) = self.stun_socket_addr.read() {
+            return guard.as_ref().cloned()
+        }
+
+        None
+    }
     pub(crate) fn new(socket_addr: SocketAddr, runtime: Arc<dyn Runtime>) -> anyhow::Result<Self> {
         let socket = std::net::UdpSocket::bind(socket_addr)?;
         let socket = runtime.wrap_udp_socket(socket)?;
@@ -60,8 +69,7 @@ impl StunSocket {
                         src_ip: None,
                     };
 
-                    socket.try_send(&request).ok();
-
+                    socket.wait_and_send(&request).await.ok();
 
                     println!("Sending to Stun Server");
                     let mut timer = runtime.new_timer(runtime.now() + Duration::from_secs(10));
@@ -130,13 +138,9 @@ impl AsyncUdpSocket for StunSocket {
     }
 
     fn local_addr(&self) -> std::io::Result<SocketAddr> {
-        if let Ok(guard) = self.stun_socket_addr.read() {
-            if let Some(addr) = guard.as_ref() {
-                return Ok(*addr);
-            }
-        }
         self.socket.local_addr()
     }
+
 
     fn max_transmit_segments(&self) -> usize {
         self.socket.max_transmit_segments()
@@ -150,3 +154,32 @@ impl AsyncUdpSocket for StunSocket {
         self.socket.may_fragment()
     }
 }
+
+
+pub trait AsyncUdpExt {
+    async fn wait_and_send(
+        &self,
+        transmit: &Transmit<'_>
+    ) -> io::Result<()>;
+}
+
+impl<T: ?Sized> AsyncUdpExt for Arc<T> where T: AsyncUdpSocket {
+    async fn wait_and_send(&self, transmit: &Transmit<'_>) -> io::Result<()> {
+        loop {
+            match self.try_send(transmit) {
+                Ok(()) => return Ok(()),
+                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+                    // 2. Buffer is full. Spawn an isolated write poller for this task
+                    let mut poller = self.clone().create_io_poller();
+
+                    // 3. Pause this async task until the OS signals writability
+                    poll_fn(|cx| poller.as_mut().poll_writable(cx)).await?;
+
+                    // 4. Poller woke us up; loop back to try the send operation again
+                }
+                Err(e) => return Err(e)
+            }
+        }
+    }
+}
+

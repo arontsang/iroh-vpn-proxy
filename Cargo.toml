@@ -25,4 +25,6 @@ rustls = { version = "0.23.40", default-features = false, features = ["ring"] }
 stun = "0.17.1"
 tokio = { version = "1.52.3", features = ["io-util", "macros", "rt"] }
 lazy_static = "1.5.0"
+axum = { version = "0.8.9", features = ["macros"] }
+serde = { version = "1.0.228", features = ["derive"] }
 
