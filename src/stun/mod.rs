@@ -37,7 +37,7 @@ impl StunSocket {
 
         None
     }
-    pub(crate) fn new(socket_addr: SocketAddr, runtime: Arc<dyn Runtime>) -> anyhow::Result<Self> {
+    pub fn new(socket_addr: SocketAddr, runtime: Arc<dyn Runtime>) -> anyhow::Result<Self> {
         let socket = std::net::UdpSocket::bind(socket_addr)?;
         let socket = runtime.wrap_udp_socket(socket)?;
 

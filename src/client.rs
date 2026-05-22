@@ -1,12 +1,15 @@
+mod stun;
 mod support;
 
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::Arc;
 use anyhow::Result;
-use quinn::{ClientConfig, Endpoint};
+use quinn::{ClientConfig, Endpoint, TokioRuntime};
 use quinn::crypto::rustls::QuicClientConfig;
 use tokio::net::{TcpListener};
+use crate::stun::StunSocket;
 use crate::support::{get_value_from_env, SkipServerVerification};
+
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
@@ -15,7 +18,17 @@ async fn main() -> Result<()> {
         .to_socket_addrs()?
         .next()
         .unwrap();
-    let mut endpoint = Endpoint::client(SocketAddr::from(([0, 0, 0, 0], 0)))?;
+
+    let endpoint = SocketAddr::from(([0,0,0,0], 0));
+    let runtime = Arc::new(TokioRuntime);
+    let socket = StunSocket::new(endpoint, runtime.clone())?;
+    
+    let mut endpoint = Endpoint::new_with_abstract_socket(
+        quinn::EndpointConfig::default(),
+        None,
+        Arc::new(socket),
+        runtime.clone()
+    )?;
 
     let client_config = ClientConfig::new(Arc::new(QuicClientConfig::try_from(
         rustls::ClientConfig::builder()
