@@ -31,22 +31,26 @@ pub async fn handle_web_request(socket: Arc<StunSocket>) -> anyhow::Result<()> {
 
 #[derive(Serialize)]
 #[derive(serde::Deserialize)]
-struct StunRequest {
-    pub endpoint: SocketAddr
+pub struct StunRequest {
+    pub endpoint: SocketAddr,
 }
 
 
 async fn do_stun_knock(State(state): State<AppState>, Json(stun_request): Json<StunRequest>) -> () {
+    println!("Knocking at {:?}", stun_request.endpoint);
 
-    let stun_knock = Transmit {
-        destination: stun_request.endpoint,
-        ecn: None,
-        src_ip: None,
-        segment_size: None,
-        contents: &0xDEADBEEF_u32.to_be_bytes(),
-    };
+    for _ in 0..10 {
+        let stun_knock = Transmit {
+            destination: stun_request.endpoint,
+            ecn: None,
+            src_ip: None,
+            segment_size: None,
+            contents: &0xDEADBEEF_u32.to_be_bytes(),
+        };
 
-    state.socket.wait_and_send(&stun_knock).await.ok();
+        state.socket.wait_and_send(&stun_knock).await.ok();
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
 }
 
 async fn get_stun_server_addr(State(state): State<AppState>) -> Json<StunRequest> {
