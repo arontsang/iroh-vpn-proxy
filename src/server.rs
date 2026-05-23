@@ -38,11 +38,10 @@ async fn run_quic_proxy() -> Result<Arc<StunSocket>> {
     let transport_config = Arc::get_mut(&mut server_config.transport).unwrap();
     transport_config.max_concurrent_uni_streams(0_u8.into());
 
-    let endpoint_config = quinn::EndpointConfig::default();
-
-
-    let port = get_value_from_env("QUIC_PORT").unwrap_or(0);
-    let endpoint = SocketAddr::from(([0,0,0,0], port));
+    let endpoint = SocketAddr::from((
+        [0,0,0,0],
+        get_value_from_env("QUIC_BIND_PORT").unwrap_or(0)
+    ));
 
     let runtime = Arc::new(TokioRuntime);
     let socket = StunSocket::new(endpoint, runtime.clone())?;
@@ -51,7 +50,7 @@ async fn run_quic_proxy() -> Result<Arc<StunSocket>> {
 
     let socket = Arc::new(socket);
     let endpoint = quinn::Endpoint::new_with_abstract_socket(
-        endpoint_config,
+        quinn::EndpointConfig::default(),
         Some(server_config),
         socket.clone(),
         runtime.clone()
