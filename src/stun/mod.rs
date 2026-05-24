@@ -1,185 +1,185 @@
-use std::fmt::{Debug, Formatter};
-use std::future::poll_fn;
-use std::io;
-use std::io::IoSliceMut;
-use std::net::SocketAddr;
-use std::pin::Pin;
-use std::sync::{Arc, RwLock};
-use std::task::{Context, Poll};
-use std::time::Duration;
-use futures::future::{AbortHandle, Abortable};
-use quinn::{AsyncUdpSocket, Runtime, UdpPoller};
-use quinn::udp::{RecvMeta, Transmit};
-use stun::message::Getter;
-use lazy_static::lazy_static;
-
-pub struct StunSocket {
-    socket: Arc<dyn AsyncUdpSocket + Send + Sync>,
-    stun_socket_addr: RwLock<Option<SocketAddr>>,
-    stun_server_poller: AbortHandle,
-}
-
-impl Drop for StunSocket {
-    fn drop(&mut self) {
-        self.stun_server_poller.abort();
-    }
-}
-
-lazy_static! {
-    static ref DEFAULT_STUN_SERVER: SocketAddr = SocketAddr::from(([74, 125, 250, 129], 19302));
-}
-impl StunSocket {
-
-    pub fn stun_addr(&self) -> Option<SocketAddr> {
-        if let Ok(guard) = self.stun_socket_addr.read() {
-            return guard.as_ref().cloned()
-        }
-
-        None
-    }
-    pub fn new(socket_addr: SocketAddr, runtime: Arc<dyn Runtime>) -> anyhow::Result<Self> {
-        let socket = std::net::UdpSocket::bind(socket_addr)?;
-        let socket = runtime.wrap_udp_socket(socket)?;
-
-        let (abort_handle, abort_registration) = AbortHandle::new_pair();
-        
-        let stun_server = std::env::var("STUN_SERVER")
-            .ok()
-            .and_then(|s| s.parse::<SocketAddr>().ok())
-            .unwrap_or(*DEFAULT_STUN_SERVER);
-
-        let stun_server_poller = Abortable::new({
-            let socket = socket.clone();
-            let runtime = runtime.clone();
-            async move{
-                // Wait until the socket is ready
-                let mut timer = runtime.new_timer(runtime.now());
-                poll_fn(|cx| timer.as_mut().poll(cx)).await;
-                loop {
-                    let mut request = stun::message::Message::new();
-                    request.build(&[
-                        Box::new(stun::message::BINDING_REQUEST),
-                    ]).unwrap();
-
-                    let request = Transmit {
-                        destination: stun_server,
-                        ecn: None,
-                        contents: request.raw.as_slice(),
-                        segment_size: None,
-                        src_ip: None,
-                    };
-
-                    socket.wait_and_send(&request).await.ok();
-
-                    println!("Sending to Stun Server");
-                    let mut timer = runtime.new_timer(runtime.now() + Duration::from_secs(10));
-                    poll_fn(|cx| timer.as_mut().poll(cx)).await;
-                }
-
-            }
-        }, abort_registration);
-        runtime.spawn(Box::pin(async move {
-            stun_server_poller.await.ok();
-        }));
-
-        Ok(Self{
-            socket,
-            stun_socket_addr: RwLock::new(None),
-            stun_server_poller: abort_handle,
-        })
-
-    }
-}
-
-impl Debug for StunSocket {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.socket.fmt(f)
-    }
-}
-
-impl AsyncUdpSocket for StunSocket {
-    fn create_io_poller(self: Arc<Self>) -> Pin<Box<dyn UdpPoller>> {
-        self.socket.clone().create_io_poller()
-    }
-
-    fn try_send(&self, transmit: &Transmit) -> std::io::Result<()> {
-        self.socket.try_send(transmit)
-    }
-
-    fn poll_recv(&self, cx: &mut Context, bufs: &mut [IoSliceMut<'_>], meta: &mut [RecvMeta]) -> Poll<std::io::Result<usize>> {
-        match self.socket.poll_recv(cx, bufs, meta) {
-            Poll::Ready(Ok(n)) => {
-                for index in 0..n {
-                    let meta = &meta[index];
-                    let buf: &[u8] = &bufs[index];
-                    let buf: &[u8] = &buf[..meta.len];
-
-                    if buf.len() < 20 || &buf[4..8] != &[0x21, 0x12, 0xA4, 0x42] {
-                        continue;
-                    }
-                    println!("Received from Stun Server");
-                    let mut response = stun::message::Message::new();
-                    let mut xor_addr = stun::xoraddr::XorMappedAddress::default();
-                    if let Ok(_) = response.write(buf) && let Ok(()) =xor_addr.get_from(&response) {
-                        println!("Your public IP and Port: {}:{}", xor_addr.ip, xor_addr.port);
-
-                        if let Ok(mut guard) = self.stun_socket_addr.write() {
-                            *guard = Some(SocketAddr::from((xor_addr.ip, xor_addr.port)));
-                            println!("Updated public IP and Port: {}:{}", xor_addr.ip, xor_addr.port);
-                        }
-                    }
-                }
-
-                Poll::Ready(Ok(n))
-            },
-            Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
-            Poll::Pending => Poll::Pending,
-        }
-    }
-
-    fn local_addr(&self) -> std::io::Result<SocketAddr> {
-        self.socket.local_addr()
-    }
-
-
-    fn max_transmit_segments(&self) -> usize {
-        self.socket.max_transmit_segments()
-    }
-
-    fn max_receive_segments(&self) -> usize {
-        self.socket.max_receive_segments()
-    }
-
-    fn may_fragment(&self) -> bool {
-        self.socket.may_fragment()
-    }
-}
-
-
-pub trait AsyncUdpExt {
-    async fn wait_and_send(
-        &self,
-        transmit: &Transmit<'_>
-    ) -> io::Result<()>;
-}
-
-impl<T: ?Sized> AsyncUdpExt for Arc<T> where T: AsyncUdpSocket {
-    async fn wait_and_send(&self, transmit: &Transmit<'_>) -> io::Result<()> {
-        loop {
-            match self.try_send(transmit) {
-                Ok(()) => return Ok(()),
-                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    // 2. Buffer is full. Spawn an isolated write poller for this task
-                    let mut poller = self.clone().create_io_poller();
-
-                    // 3. Pause this async task until the OS signals writability
-                    poll_fn(|cx| poller.as_mut().poll_writable(cx)).await?;
-
-                    // 4. Poller woke us up; loop back to try the send operation again
-                }
-                Err(e) => return Err(e)
-            }
-        }
-    }
-}
-
+// use std::fmt::{Debug, Formatter};
+// use std::future::poll_fn;
+// use std::io;
+// use std::io::IoSliceMut;
+// use std::net::SocketAddr;
+// use std::pin::Pin;
+// use std::sync::{Arc, RwLock};
+// use std::task::{Context, Poll};
+// use std::time::Duration;
+// use futures::future::{AbortHandle, Abortable};
+// use quinn::{AsyncUdpSocket, Runtime, UdpPoller};
+// use quinn::udp::{RecvMeta, Transmit};
+// use stun::message::Getter;
+// use lazy_static::lazy_static;
+//
+// pub struct StunSocket {
+//     socket: Arc<dyn AsyncUdpSocket + Send + Sync>,
+//     stun_socket_addr: RwLock<Option<SocketAddr>>,
+//     stun_server_poller: AbortHandle,
+// }
+//
+// impl Drop for StunSocket {
+//     fn drop(&mut self) {
+//         self.stun_server_poller.abort();
+//     }
+// }
+//
+// lazy_static! {
+//     static ref DEFAULT_STUN_SERVER: SocketAddr = SocketAddr::from(([74, 125, 250, 129], 19302));
+// }
+// impl StunSocket {
+//
+//     pub fn stun_addr(&self) -> Option<SocketAddr> {
+//         if let Ok(guard) = self.stun_socket_addr.read() {
+//             return guard.as_ref().cloned()
+//         }
+//
+//         None
+//     }
+//     pub fn new(socket_addr: SocketAddr, runtime: Arc<dyn Runtime>) -> anyhow::Result<Self> {
+//         let socket = std::net::UdpSocket::bind(socket_addr)?;
+//         let socket = runtime.wrap_udp_socket(socket)?;
+//
+//         let (abort_handle, abort_registration) = AbortHandle::new_pair();
+//
+//         let stun_server = std::env::var("STUN_SERVER")
+//             .ok()
+//             .and_then(|s| s.parse::<SocketAddr>().ok())
+//             .unwrap_or(*DEFAULT_STUN_SERVER);
+//
+//         let stun_server_poller = Abortable::new({
+//             let socket = socket.clone();
+//             let runtime = runtime.clone();
+//             async move{
+//                 // Wait until the socket is ready
+//                 let mut timer = runtime.new_timer(runtime.now());
+//                 poll_fn(|cx| timer.as_mut().poll(cx)).await;
+//                 loop {
+//                     let mut request = stun::message::Message::new();
+//                     request.build(&[
+//                         Box::new(stun::message::BINDING_REQUEST),
+//                     ]).unwrap();
+//
+//                     let request = Transmit {
+//                         destination: stun_server,
+//                         ecn: None,
+//                         contents: request.raw.as_slice(),
+//                         segment_size: None,
+//                         src_ip: None,
+//                     };
+//
+//                     socket.wait_and_send(&request).await.ok();
+//
+//                     println!("Sending to Stun Server");
+//                     let mut timer = runtime.new_timer(runtime.now() + Duration::from_secs(10));
+//                     poll_fn(|cx| timer.as_mut().poll(cx)).await;
+//                 }
+//
+//             }
+//         }, abort_registration);
+//         runtime.spawn(Box::pin(async move {
+//             stun_server_poller.await.ok();
+//         }));
+//
+//         Ok(Self{
+//             socket,
+//             stun_socket_addr: RwLock::new(None),
+//             stun_server_poller: abort_handle,
+//         })
+//
+//     }
+// }
+//
+// impl Debug for StunSocket {
+//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+//         self.socket.fmt(f)
+//     }
+// }
+//
+// impl AsyncUdpSocket for StunSocket {
+//     fn create_io_poller(self: Arc<Self>) -> Pin<Box<dyn UdpPoller>> {
+//         self.socket.clone().create_io_poller()
+//     }
+//
+//     fn try_send(&self, transmit: &Transmit) -> std::io::Result<()> {
+//         self.socket.try_send(transmit)
+//     }
+//
+//     fn poll_recv(&self, cx: &mut Context, bufs: &mut [IoSliceMut<'_>], meta: &mut [RecvMeta]) -> Poll<std::io::Result<usize>> {
+//         match self.socket.poll_recv(cx, bufs, meta) {
+//             Poll::Ready(Ok(n)) => {
+//                 for index in 0..n {
+//                     let meta = &meta[index];
+//                     let buf: &[u8] = &bufs[index];
+//                     let buf: &[u8] = &buf[..meta.len];
+//
+//                     if buf.len() < 20 || &buf[4..8] != &[0x21, 0x12, 0xA4, 0x42] {
+//                         continue;
+//                     }
+//                     println!("Received from Stun Server");
+//                     let mut response = stun::message::Message::new();
+//                     let mut xor_addr = stun::xoraddr::XorMappedAddress::default();
+//                     if let Ok(_) = response.write(buf) && let Ok(()) =xor_addr.get_from(&response) {
+//                         println!("Your public IP and Port: {}:{}", xor_addr.ip, xor_addr.port);
+//
+//                         if let Ok(mut guard) = self.stun_socket_addr.write() {
+//                             *guard = Some(SocketAddr::from((xor_addr.ip, xor_addr.port)));
+//                             println!("Updated public IP and Port: {}:{}", xor_addr.ip, xor_addr.port);
+//                         }
+//                     }
+//                 }
+//
+//                 Poll::Ready(Ok(n))
+//             },
+//             Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
+//             Poll::Pending => Poll::Pending,
+//         }
+//     }
+//
+//     fn local_addr(&self) -> std::io::Result<SocketAddr> {
+//         self.socket.local_addr()
+//     }
+//
+//
+//     fn max_transmit_segments(&self) -> usize {
+//         self.socket.max_transmit_segments()
+//     }
+//
+//     fn max_receive_segments(&self) -> usize {
+//         self.socket.max_receive_segments()
+//     }
+//
+//     fn may_fragment(&self) -> bool {
+//         self.socket.may_fragment()
+//     }
+// }
+//
+//
+// pub trait AsyncUdpExt {
+//     async fn wait_and_send(
+//         &self,
+//         transmit: &Transmit<'_>
+//     ) -> io::Result<()>;
+// }
+//
+// impl<T: ?Sized> AsyncUdpExt for Arc<T> where T: AsyncUdpSocket {
+//     async fn wait_and_send(&self, transmit: &Transmit<'_>) -> io::Result<()> {
+//         loop {
+//             match self.try_send(transmit) {
+//                 Ok(()) => return Ok(()),
+//                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+//                     // 2. Buffer is full. Spawn an isolated write poller for this task
+//                     let mut poller = self.clone().create_io_poller();
+//
+//                     // 3. Pause this async task until the OS signals writability
+//                     poll_fn(|cx| poller.as_mut().poll_writable(cx)).await?;
+//
+//                     // 4. Poller woke us up; loop back to try the send operation again
+//                 }
+//                 Err(e) => return Err(e)
+//             }
+//         }
+//     }
+// }
+//

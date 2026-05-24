@@ -3,81 +3,77 @@ pub mod support;
 pub mod tunnel;
 mod web;
 
-use std::net::SocketAddr;
-use std::sync::Arc;
-use anyhow::Result;
-use quinn::crypto::rustls::QuicServerConfig;
-use quinn::{rustls, AsyncUdpSocket, Incoming, Runtime, TokioRuntime};
-use crate::stun::StunSocket;
-use crate::support::{get_value_from_env, TokioIo};
+use std::env;
+use std::pin::Pin;
+use crate::support::TokioIo;
 use crate::tunnel::handle_proxy_request;
 use crate::web::handle_web_request;
+use anyhow::Result;
+use std::sync::Arc;
+use iroh::Endpoint;
+use iroh::endpoint::{presets, Connection};
+use iroh::protocol::{AcceptError, DynProtocolHandler, Router};
+use iroh_tickets::{Ticket, endpoint::EndpointTicket};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
+    let endpoint = Endpoint::bind(presets::N0).await?;
+    endpoint.online().await;
 
-    let socket = run_quic_proxy().await?;
-    handle_web_request(socket).await?;
-
-    Ok(())
-}
-
-async fn run_quic_proxy() -> Result<Arc<StunSocket>> {
-    let rcgen::CertifiedKey { cert, signing_key } =
-        rcgen::generate_simple_self_signed(vec!["localhost".into()])?;
-    let cert = cert.der().clone();
-    let key_der = signing_key.serialize_der().try_into().unwrap();
-
-
-    let server_crypto = rustls::ServerConfig::builder()
-        .with_no_client_auth()
-        .with_single_cert(vec![cert], key_der)?;
-
-    let mut server_config =
-        quinn::ServerConfig::with_crypto(Arc::new(QuicServerConfig::try_from(server_crypto)?));
-    let transport_config = Arc::get_mut(&mut server_config.transport).unwrap();
-    transport_config.max_concurrent_uni_streams(0_u8.into());
-
-    let endpoint = SocketAddr::from((
-        [0,0,0,0],
-        get_value_from_env("QUIC_BIND_PORT").unwrap_or(0)
-    ));
-
-    let runtime = Arc::new(TokioRuntime);
-    let socket = StunSocket::new(endpoint, runtime.clone())?;
-
-    println!("Listening on {}", socket.local_addr()?);
-
-    let socket = Arc::new(socket);
-    let endpoint = quinn::Endpoint::new_with_abstract_socket(
-        quinn::EndpointConfig::default(),
-        Some(server_config),
-        socket.clone(),
-        runtime.clone()
-    )?;
-
-    runtime.spawn(Box::pin(async move {
-        while let Some(conn) = endpoint.accept().await {
-            tokio::spawn(async move {
-                handle_quic_connection(conn).await.ok();
-            });
+    // Optionally push endpoint metrics to iroh-services if an API secret is
+    // available. Keep the client bound for the lifetime of the receiver so it
+    // continues reporting in the background.
+    let _services_client = match env::var("IROH_SERVICES_API_SECRET") {
+        Ok(_) => {
+            let client = iroh_services::Client::builder(&endpoint)
+                .api_secret_from_env()?
+                .name("iroh-ping-quickstart")?
+                .build()
+                .await?;
+            println!("registered with iroh-services, pushing endpoint metrics");
+            Some(client)
         }
-    }));
+        Err(_) => {
+            println!(
+                "IROH_SERVICES_API_SECRET not set, skipping iroh-services setup. \
+                 Get a free API key at https://services.iroh.computer to see endpoint metrics and debug connectivity issues."
+            );
+            None
+        }
+    };
 
-    Ok(socket)
-}
+    let ticket = EndpointTicket::new(endpoint.addr());
 
-async fn handle_quic_connection(conn: Incoming) -> Result<()> {
-    let conn = conn.await?;
-    while let Ok((send, recv)) = conn.accept_bi().await {
-        let client = tokio::io::join(recv, send);
-        let client = TokioIo::new(client);
-        _ = tokio::spawn(async move {
-            handle_proxy_request(client);
-        });
+    let handler: Box<dyn DynProtocolHandler> = Box::new(ProxyHandler);
+    let router = Router::builder(endpoint)
+        .accept("stun-proxy".as_bytes(), handler)
+        .spawn();
+
+
+    tokio::select! {
+        _ = handle_web_request(Arc::new(ticket.into())) => {},
+        _ = tokio::signal::ctrl_c() => {}
     }
 
-
     Ok(())
-
 }
+
+
+#[derive(Debug)]
+struct ProxyHandler;
+
+impl DynProtocolHandler for ProxyHandler {
+    fn accept(&self, connection: Connection) -> Pin<Box<dyn Future<Output=std::result::Result<(), AcceptError>> + Send + '_>> {
+        Box::pin(async move {
+            while let Ok((send, recv)) = connection.accept_bi().await {
+                let client = tokio::io::join(recv, send);
+                let client = TokioIo::new(client);
+                _ = tokio::spawn(async move {
+                    handle_proxy_request(client);
+                });
+            }
+            Ok(())
+        })
+    }
+}
+

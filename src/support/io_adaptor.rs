@@ -6,7 +6,6 @@ use std::{
 };
 
 use pin_project_lite::pin_project;
-use quinn::{RecvStream, SendStream};
 use tokio::io::{join, Join};
 
 pin_project! {
@@ -17,11 +16,6 @@ pin_project! {
     }
 }
 
-impl TokioIo<Join<RecvStream, SendStream>> {
-    pub fn from_bi((recv, send): (SendStream, RecvStream)) -> Self {
-        Self::new(join(send, recv))
-    }
-}
 
 impl<T> TokioIo<T> {
     pub fn new(inner: T) -> Self {

@@ -1,26 +1,23 @@
-use crate::stun::AsyncUdpExt;
-use crate::stun::StunSocket;
 use crate::support::get_value_from_env;
-use axum::routing::{get, post};
-use axum::{extract::{Query, State}, Json, Router};
-use quinn::udp::Transmit;
-use serde::{Deserialize, Serialize};
+use axum::routing::get;
+use axum::{extract::{Query, State}, Router};
+use iroh_tickets::endpoint::EndpointTicket;
+use serde::Deserialize;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
 #[derive(Clone)]
 struct AppState {
-    socket: Arc<StunSocket>
+    ticket: Arc<EndpointTicket>
 }
 
-pub async fn handle_web_request(socket: Arc<StunSocket>) -> anyhow::Result<()> {
-    let state = AppState { socket };
+pub async fn handle_web_request(ticket: Arc<EndpointTicket>) -> anyhow::Result<()> {
+    let state = AppState { ticket };
 
     let app = Router::new()
         .route("/keep_alive", get(keep_alive))
-        .route("/stun/get_endpoint", get(get_stun_server_addr))
-        .route("/stun/knock", post(do_stun_knock))
+        .route("/iroh/ticket", get(get_ticket))
         .with_state(state);
 
     let port = get_value_from_env("HTTP_PORT").unwrap_or(8080u16);
@@ -29,33 +26,9 @@ pub async fn handle_web_request(socket: Arc<StunSocket>) -> anyhow::Result<()> {
     Ok(axum::serve(listener, app).await?)
 }
 
-#[derive(Serialize)]
-#[derive(serde::Deserialize)]
-pub struct StunRequest {
-    pub endpoint: SocketAddr,
-}
 
-
-async fn do_stun_knock(State(state): State<AppState>, Json(stun_request): Json<StunRequest>) -> () {
-    println!("Knocking at {:?}", stun_request.endpoint);
-
-    for _ in 0..10 {
-        let stun_knock = Transmit {
-            destination: stun_request.endpoint,
-            ecn: None,
-            src_ip: None,
-            segment_size: None,
-            contents: &0xDEADBEEF_u32.to_be_bytes(),
-        };
-
-        state.socket.wait_and_send(&stun_knock).await.ok();
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
-}
-
-async fn get_stun_server_addr(State(state): State<AppState>) -> Json<StunRequest> {
-    let my_stun_addr = state.socket.stun_addr().unwrap();
-    Json(StunRequest{endpoint: my_stun_addr })
+async fn get_ticket(State(state): State<AppState>) -> String {
+    state.ticket.to_string()
 }
 
 #[derive(Deserialize)]
