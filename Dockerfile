@@ -18,7 +18,7 @@ RUN --mount=type=cache,target=/root/.cargo/registry \
       *)              RUST_TARGET="x86_64-unknown-linux-musl" ;; \
     esac && \
     rustup target add "$RUST_TARGET" && \
-    cargo zigbuild --release --target "$RUST_TARGET" --bin server
+    cargo zigbuild --release --target "$RUST_TARGET" --bin $TARGET_BIN
 RUN --mount=type=cache,target=/root/.cargo/registry \
     --mount=type=cache,target=/app/target \
     case "$TARGETPLATFORM" in \
@@ -40,4 +40,4 @@ ENV QUIC_PORT=0
 EXPOSE 80
 WORKDIR /opt/app
 
-ENTRYPOINT ["bin"]
+ENTRYPOINT ["./bin"]
