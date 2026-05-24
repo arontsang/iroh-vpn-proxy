@@ -119,7 +119,8 @@ impl AppState {
         println!("connected to server {}", server_base);
         let keep_alive = self.local_executor.spawn(async move {
             loop {
-                // Continously ping the server to keep the connection alive.
+                // Continuously ping the server to keep the connection alive.
+                println!("Calling GET /keep_alive");
                 reqwest::get(&format!("{}/keep_alive?time_out_secs=300", server_base)).await.ok();
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }
