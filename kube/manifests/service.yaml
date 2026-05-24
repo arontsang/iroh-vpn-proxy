@@ -1,0 +1,17 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: proxy
+spec:
+  ipFamilies:
+    - IPv4
+  ports:
+    - protocol: TCP
+      port: 3128
+      targetPort: 3128
+      name: http
+  selector:
+    app: proxy-forwarder
+  type: LoadBalancer
+  ipFamilyPolicy: SingleStack
+  externalTrafficPolicy: Local

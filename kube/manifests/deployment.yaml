@@ -1,0 +1,32 @@
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: proxy
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: proxy-forwarder
+  template:
+    metadata:
+      labels:
+        app: proxy-forwarder
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: proxy-forwarder
+          securityContext:
+            allowPrivilegeEscalation: false
+          env:
+            - name: SERVER_ADDR
+              value: https://my-exit-node-domain.com/
+            - name: PROXY_PORT
+              value: "3128"
+          image: ghcr.io/arontsang/iroh-vpn-proxy:iroh-client
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3128
