@@ -3,7 +3,7 @@ mod support;
 use crate::support::get_value_from_env;
 use anyhow::Result;
 use async_executor::{LocalExecutor, Task};
-use iroh::endpoint::{presets, Connection, VarInt};
+use iroh::endpoint::{presets, Connection, QuicTransportConfig, VarInt};
 use iroh::Endpoint;
 use iroh_tickets::endpoint::EndpointTicket;
 
@@ -18,6 +18,7 @@ use std::time::Duration;
 use tokio::io::copy_bidirectional;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
+use crate::support::iroh::build_endpoint;
 
 #[pin_project(PinnedDrop)]
 struct CopyJob<F> {
@@ -112,8 +113,9 @@ impl AppState {
         let ticket = reqwest::get(&format!("{}/iroh/ticket", server_base)).await?
             .text()
             .await?;
+        
 
-        let endpoint = Endpoint::bind(presets::N0).await?;
+        let endpoint = build_endpoint().await?;
         let ticket = EndpointTicket::from_str(&ticket)?;
         let connection = endpoint.connect(ticket, "stun-proxy".as_bytes()).await?;
         println!("connected to server {}", server_base);

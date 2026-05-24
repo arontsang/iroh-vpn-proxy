@@ -4,19 +4,20 @@ mod web;
 
 use std::env;
 use std::pin::Pin;
-use crate::support::TokioIo;
+use crate::support::{get_value_from_env, TokioIo};
 use crate::tunnel::handle_proxy_request;
 use crate::web::handle_web_request;
 use anyhow::Result;
 use std::sync::Arc;
 use iroh::Endpoint;
-use iroh::endpoint::{presets, Connection};
+use iroh::endpoint::{presets, Connection, QuicTransportConfig};
 use iroh::protocol::{AcceptError, DynProtocolHandler, Router};
 use iroh_tickets::endpoint::EndpointTicket;
+use crate::support::iroh::build_endpoint;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
-    let endpoint = Endpoint::bind(presets::N0).await?;
+    let endpoint = build_endpoint().await?;
     endpoint.online().await;
 
     // Optionally push endpoint metrics to iroh-services if an API secret is
