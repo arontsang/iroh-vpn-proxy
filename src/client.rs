@@ -1,14 +1,12 @@
-mod stun;
 mod support;
-mod web;
 
 use crate::support::get_value_from_env;
 use anyhow::Result;
 use iroh::endpoint::{presets, Connection, VarInt};
 use iroh::Endpoint;
 use iroh_tickets::endpoint::EndpointTicket;
-use pin_project::__private::PinnedDrop;
-use pin_project::pin_project;
+
+use pin_project::{pin_project, pinned_drop};
 use std::cell::Cell;
 use std::net::{SocketAddr};
 use std::pin::Pin;
@@ -45,8 +43,9 @@ impl Drop for Uplink {
     }
 }
 
+#[pinned_drop]
 impl<F> PinnedDrop for CopyJob<F> {
-    unsafe fn drop(self: Pin<&mut Self>) {
+    fn drop(self: Pin<&mut Self>) {
         self.local.spawn_local({
             let handler = self.handler.clone();
             let linger = self.linger.clone();

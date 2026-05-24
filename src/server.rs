@@ -1,4 +1,3 @@
-pub mod stun;
 pub mod support;
 pub mod tunnel;
 mod web;
@@ -13,8 +12,7 @@ use std::sync::Arc;
 use iroh::Endpoint;
 use iroh::endpoint::{presets, Connection};
 use iroh::protocol::{AcceptError, DynProtocolHandler, Router};
-use iroh_tickets::{Ticket, endpoint::EndpointTicket};
-use tokio::select;
+use iroh_tickets::endpoint::EndpointTicket;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
@@ -46,7 +44,7 @@ async fn main() -> Result<()> {
     let ticket = EndpointTicket::new(endpoint.addr());
 
     let handler: Box<dyn DynProtocolHandler> = Box::new(ProxyHandler);
-    let router = Router::builder(endpoint)
+    let _router = Router::builder(endpoint)
         .accept("stun-proxy".as_bytes(), handler)
         .spawn();
 
