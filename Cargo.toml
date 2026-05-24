@@ -22,7 +22,7 @@ rustls = { version = "0.23.40", default-features = false, features = ["ring"] }
 tokio = { version = "1.52.3", features = ["io-util", "macros", "rt", "signal"] }
 axum = { version = "0.8.9", features = ["macros"] }
 serde = { version = "1.0.228", features = ["derive"] }
-reqwest = { version = "0.13.3", default-features = false, features = ["json", "native-tls"] }
+reqwest = { version = "0.13.3" }
 iroh = "0.98.2"
 iroh-metrics = "0.38.3"
 iroh-tickets = "0.5.0"
