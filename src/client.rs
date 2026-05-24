@@ -78,6 +78,7 @@ async fn build_new_connection() -> Result<Uplink> {
     let endpoint = Endpoint::bind(presets::N0).await?;
     let ticket = EndpointTicket::from_str(&ticket)?;
     let connection = endpoint.connect(ticket, "stun-proxy".as_bytes()).await?;
+    println!("connected to server {}", server_base);
     let keep_alive = tokio::spawn(async move {
         loop {
             // Continously ping the server to keep the connection alive.
