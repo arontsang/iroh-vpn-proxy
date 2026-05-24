@@ -3728,6 +3728,7 @@ dependencies = [
  "iroh-metrics",
  "iroh-services",
  "iroh-tickets",
+ "pin-project",
  "pin-project-lite",
  "reqwest",
  "rustls",

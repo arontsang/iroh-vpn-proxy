@@ -14,6 +14,7 @@ use iroh::Endpoint;
 use iroh::endpoint::{presets, Connection};
 use iroh::protocol::{AcceptError, DynProtocolHandler, Router};
 use iroh_tickets::{Ticket, endpoint::EndpointTicket};
+use tokio::select;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
@@ -64,16 +65,44 @@ struct ProxyHandler;
 
 impl DynProtocolHandler for ProxyHandler {
     fn accept(&self, connection: Connection) -> Pin<Box<dyn Future<Output=std::result::Result<(), AcceptError>> + Send + '_>> {
+        println!("new connection from {}", connection.remote_id());
         Box::pin(async move {
+
+            tokio::spawn( {
+                let connection = connection.clone();
+                async move {
+                    let error = connection.closed().await;
+                    println!("connection closed: {:?}", error);
+                }
+            });
+
+            // select! {
+            //     _ = async {
+            //         while let Ok((send, recv)) = connection.accept_bi().await {
+            //             println!("accepted connection from {}", connection.remote_id());
+            //             let client = tokio::io::join(recv, send);
+            //             let client = TokioIo::new(client);
+            //             _ = tokio::spawn(async move {
+            //                 handle_proxy_request(client);
+            //             });
+            //         }
+            //     } => {},
+            //     x = connection.closed() => { println!("client disconnected: {:?}", x); },
+            // }
+
             while let Ok((send, recv)) = connection.accept_bi().await {
+                println!("accepted connection from {}", connection.remote_id());
                 let client = tokio::io::join(recv, send);
                 let client = TokioIo::new(client);
                 _ = tokio::spawn(async move {
                     handle_proxy_request(client);
                 });
             }
+
             Ok(())
         })
     }
+
+
 }
 
