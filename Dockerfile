@@ -5,6 +5,7 @@ RUN apk add --no-cache py3-pip && pip install ziglang --break-system-packages &&
 FROM builder AS compiler
 
 ARG TARGETPLATFORM
+ARG TARGET_BIN=server
 WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 COPY src/ src/
@@ -26,16 +27,17 @@ RUN --mount=type=cache,target=/root/.cargo/registry \
       *)              RUST_TARGET="x86_64-unknown-linux-musl" ;; \
     esac && \
     mkdir /dist && \
-    cp "target/$RUST_TARGET/release/server" /dist/server
+    cp "target/$RUST_TARGET/release/$TARGET_BIN" /dist/$TARGET_BIN
 
 ARG TARGETPLATFORM
 FROM --platform=$TARGETPLATFORM alpine:latest
+ARG TARGET_BIN=server
 
-COPY --from=compiler /dist/server /usr/local/bin/server
+COPY --from=compiler /dist/$TARGET_BIN /opt/app/bin
 
 ENV HTTP_PORT=80
 ENV QUIC_PORT=0
 EXPOSE 80
+WORKDIR /opt/app
 
-
-ENTRYPOINT ["server"]
+ENTRYPOINT ["bin"]
