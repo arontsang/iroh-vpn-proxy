@@ -27,7 +27,7 @@ async fn main() -> Result<()> {
         Ok(_) => {
             let client = iroh_services::Client::builder(&endpoint)
                 .api_secret_from_env()?
-                .name("iroh-ping-quickstart")?
+                .name("iroh-vpn-proxy")?
                 .build()
                 .await?;
             println!("registered with iroh-services, pushing endpoint metrics");
