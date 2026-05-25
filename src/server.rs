@@ -8,10 +8,9 @@ use crate::tunnel::handle_proxy_request;
 use crate::web::handle_web_request;
 use anyhow::Result;
 use iroh::endpoint::Connection;
-use iroh::protocol::{AcceptError, DynProtocolHandler, Router};
+use iroh::protocol::{AcceptError,  ProtocolHandler, Router};
 use iroh_tickets::endpoint::EndpointTicket;
 use std::env;
-use std::pin::Pin;
 use std::sync::Arc;
 
 #[tokio::main(flavor = "current_thread")]
@@ -43,7 +42,7 @@ async fn main() -> Result<()> {
 
     let ticket = EndpointTicket::new(endpoint.addr());
 
-    let handler: Box<dyn DynProtocolHandler> = Box::new(ProxyHandler);
+    let handler = Box::new(ProxyHandler);
     let _router = Router::builder(endpoint)
         .accept("stun-proxy".as_bytes(), handler)
         .spawn();
@@ -61,10 +60,10 @@ async fn main() -> Result<()> {
 #[derive(Debug)]
 struct ProxyHandler;
 
-impl DynProtocolHandler for ProxyHandler {
-    fn accept(&self, connection: Connection) -> Pin<Box<dyn Future<Output=std::result::Result<(), AcceptError>> + Send + '_>> {
+impl ProtocolHandler for ProxyHandler {
+    fn accept(&self, connection: Connection) -> impl Future<Output = Result<(), AcceptError>> + Send {
         println!("new connection from {}", connection.remote_id());
-        Box::pin(async move {
+        async move {
 
             tokio::spawn( {
                 let connection = connection.clone();
@@ -73,20 +72,6 @@ impl DynProtocolHandler for ProxyHandler {
                     println!("connection closed: {:?}", error);
                 }
             });
-
-            // select! {
-            //     _ = async {
-            //         while let Ok((send, recv)) = connection.accept_bi().await {
-            //             println!("accepted connection from {}", connection.remote_id());
-            //             let client = tokio::io::join(recv, send);
-            //             let client = TokioIo::new(client);
-            //             _ = tokio::spawn(async move {
-            //                 handle_proxy_request(client);
-            //             });
-            //         }
-            //     } => {},
-            //     x = connection.closed() => { println!("client disconnected: {:?}", x); },
-            // }
 
             while let Ok((send, recv)) = connection.accept_bi().await {
                 println!("accepted connection from {}", connection.remote_id());
@@ -98,9 +83,7 @@ impl DynProtocolHandler for ProxyHandler {
             }
 
             Ok(())
-        })
+        }
     }
-
-
 }
 
