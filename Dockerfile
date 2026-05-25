@@ -2,14 +2,33 @@ FROM --platform=$BUILDPLATFORM rust:alpine AS builder
 
 RUN apk add --no-cache py3-pip && pip install ziglang --break-system-packages && cargo install cargo-zigbuild
 
-FROM builder AS compiler
+FROM builder AS compile-dependencies
 
 ARG TARGETPLATFORM
 ARG TARGET_BIN=server
 WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
-COPY src/ src/
 
+
+COPY src/hello.rs ./src/$TARGET_BIN.rs
+RUN case "$TARGETPLATFORM" in \
+      "linux/amd64")  RUST_TARGET="x86_64-unknown-linux-musl" ;; \
+      "linux/arm64")  RUST_TARGET="aarch64-unknown-linux-musl" ;; \
+      *)              RUST_TARGET="x86_64-unknown-linux-musl" ;; \
+    esac && \
+    rustup target add "$RUST_TARGET"
+RUN --mount=type=cache,target=/root/.cargo/registry \
+    --mount=type=cache,target=/app/target \
+    case "$TARGETPLATFORM" in \
+          "linux/amd64")  RUST_TARGET="x86_64-unknown-linux-musl" ;; \
+          "linux/arm64")  RUST_TARGET="aarch64-unknown-linux-musl" ;; \
+          *)              RUST_TARGET="x86_64-unknown-linux-musl" ;; \
+    esac && \
+    cargo zigbuild --release --target "$RUST_TARGET" --bin $TARGET_BIN && \
+    rm -rf src/
+
+FROM compile-dependencies AS compiler
+COPY src/ src/
 RUN --mount=type=cache,target=/root/.cargo/registry \
     --mount=type=cache,target=/app/target \
     case "$TARGETPLATFORM" in \
@@ -17,15 +36,7 @@ RUN --mount=type=cache,target=/root/.cargo/registry \
       "linux/arm64")  RUST_TARGET="aarch64-unknown-linux-musl" ;; \
       *)              RUST_TARGET="x86_64-unknown-linux-musl" ;; \
     esac && \
-    rustup target add "$RUST_TARGET" && \
-    cargo zigbuild --release --target "$RUST_TARGET" --bin $TARGET_BIN
-RUN --mount=type=cache,target=/root/.cargo/registry \
-    --mount=type=cache,target=/app/target \
-    case "$TARGETPLATFORM" in \
-      "linux/amd64")  RUST_TARGET="x86_64-unknown-linux-musl" ;; \
-      "linux/arm64")  RUST_TARGET="aarch64-unknown-linux-musl" ;; \
-      *)              RUST_TARGET="x86_64-unknown-linux-musl" ;; \
-    esac && \
+    cargo zigbuild  --offline --frozen --release --target "$RUST_TARGET" --bin $TARGET_BIN && \
     mkdir /dist && \
     cp "target/$RUST_TARGET/release/$TARGET_BIN" /dist/$TARGET_BIN
 

@@ -11,6 +11,10 @@ path = "src/client.rs"
 name = "server"
 path = "src/server.rs"
 
+[[bin]]
+name = "hello"
+path = "src/hello.rs"
+
 [dependencies]
 anyhow = "1.0.102"
 bytes = "1.11.1"
