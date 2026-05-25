@@ -3,13 +3,14 @@ mod support;
 use crate::support::get_value_from_env;
 use anyhow::Result;
 use async_executor::{LocalExecutor, Task};
-use iroh::endpoint::{presets, Connection, QuicTransportConfig, VarInt};
+use iroh::endpoint::{Connection, VarInt};
 use iroh::Endpoint;
 use iroh_tickets::endpoint::EndpointTicket;
 
+use crate::support::iroh::build_endpoint;
 use pin_project::{pin_project, pinned_drop};
 use std::cell::Cell;
-use std::net::{SocketAddr};
+use std::net::SocketAddr;
 use std::pin::Pin;
 use std::rc::{Rc, Weak};
 use std::str::FromStr;
@@ -18,7 +19,6 @@ use std::time::Duration;
 use tokio::io::copy_bidirectional;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
-use crate::support::iroh::build_endpoint;
 
 #[pin_project(PinnedDrop)]
 struct CopyJob<F> {

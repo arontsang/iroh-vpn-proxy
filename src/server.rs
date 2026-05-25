@@ -2,25 +2,24 @@ pub mod support;
 pub mod tunnel;
 mod web;
 
-use std::env;
-use std::pin::Pin;
-use crate::support::{get_value_from_env, TokioIo};
+use crate::support::iroh::build_endpoint;
+use crate::support::TokioIo;
 use crate::tunnel::handle_proxy_request;
 use crate::web::handle_web_request;
 use anyhow::Result;
-use std::sync::Arc;
-use iroh::Endpoint;
-use iroh::endpoint::{presets, Connection, QuicTransportConfig};
+use iroh::endpoint::Connection;
 use iroh::protocol::{AcceptError, DynProtocolHandler, Router};
 use iroh_tickets::endpoint::EndpointTicket;
-use crate::support::iroh::build_endpoint;
+use std::env;
+use std::pin::Pin;
+use std::sync::Arc;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     let endpoint = build_endpoint().await?;
     endpoint.online().await;
 
-    // Optionally push endpoint metrics to iroh-services if an API secret is
+    // Optionally, push endpoint metrics to iroh-services if an API secret is
     // available. Keep the client bound for the lifetime of the receiver so it
     // continues reporting in the background.
     let _services_client = match env::var("IROH_SERVICES_API_SECRET") {
