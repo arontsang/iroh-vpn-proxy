@@ -15,9 +15,16 @@ pub async fn build_endpoint() -> anyhow::Result<Endpoint> {
     };
     let quic_config = quic_config.build();
 
-    let endpoint = Endpoint::builder(presets::N0)
-        .transport_config(quic_config)
-        .bind().await?;
+    let mut endpoint = Endpoint::builder(presets::N0)
+        .transport_config(quic_config);
+
+    if let Some(bind_addr) = get_value_from_env::<String>("BIND_ADDR") {
+        endpoint = endpoint.bind_addr(bind_addr)?;
+    }
+
+    let endpoint = endpoint
+        .bind()
+        .await?;
 
     Ok(endpoint)
 }
