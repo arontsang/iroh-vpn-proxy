@@ -1,13 +1,64 @@
 # Iroh Proxy
 
-This project is a two part vpn/proxy server that uses Iroh to tunnel from the
-entry client node to the exit server node.
+## What is this is for
 
-By using Iroh, we can use NAT UDP hole-punching to create a secure tunnel between
-the two nodes, even when either/both are being a NAT.
+This is a lightweight project that is designed to be deployed to Azure's FAAS intrastructure to provide the user
+with a on-demand scale to zero VPN/HTTP Proxy for use with circumventing geolocation and political firewall
+restrictions, with minimal cost (scale to zero).
 
-This is extremely useful for hosting the exit server in constrained environments
-such as on FAAS infrastructure.
+The project comes in two parts. A FAAS binary that is deployed to Azure's Functions. This must be configured
+to dial back to the user's router (which should be running wireguard).
+
+The second part of the project is a tiny daemon that runs on the user's network, and intercepts the HTTP proxy
+requests, forwards the request to the Azure Function (over the Wireguard tunnel) whilst also calling a keep alive
+endpoint on the Azure functions trigger.
+
+## How this works
+
+### The FaaS binary contains:
+  - A UDP NAT hole punch
+  - A QUIC server
+  - A meta data http server (to act as the side channel for UDP hole punching)
+  - A HTTP forward proxy (behind the QUIC server)
+
+On startup, the FaaS application does a UDP hole punch to get a publicly accessible port.
+
+It then advertises the UDP port on it HTTP server.
+
+On incoming QUIC connections, we treat the bi-directional streams as HTTP/1.1 forward proxy requests.
+
+### The client binary:
+  - TCP Listener/forwarder
+  - Iroh UDP hole puncher
+  - A QUIC client
+  - Http Keep Alive component
+
+The client on receiving an incoming TCP request, will the UDP hole-punch into the FaaS service
+using the HTTP service to setup the side channel (getting the public socket address, and initiating
+UDP hole punch packets).
+
+We then open up a Quic connection, then tunnel all incoming TCP connections through Quic.
+
+Additionally we also start a task to keep the FaaS alive until all connections are drained.
+
+## What is this is for
+
+This is a lightweight project that is designed to be deployed to Azure's FAAS intrastructure to provide the user
+with a on-demand scale to zero VPN/HTTP Proxy for use with circumventing geolocation and political firewall
+restrictions, with minimal cost (scale to zero).
+
+This should easily be able to run within the free tier of Azure's Functions for approximately 8 days per month 
+(approximately 1/4 of the time).
+
+## Why does this exist?
+
+This is a lightweight project that is designed to be deployed to Azure's FAAS intrastructure to provide the user
+with a on-demand scale to zero VPN/HTTP Proxy for use with circumventing geolocation and political firewall
+restrictions, with minimal cost (scale to zero).
+
+Originally this project used a userland TCP/IP stack and wireguard for tunneling the proxy requests. However,
+I found that I quickly hit a performance bottleneck between the TCP/IP stack and the UDP socket, which I could not 
+solve easily.
 
 As long as the FAAS infrastructure allows a HTTP request in, we can get the Iroh
 ticket to connect to the exit server from the entry node.
