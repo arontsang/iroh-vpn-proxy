@@ -2,7 +2,7 @@ pub mod support;
 pub mod tunnel;
 mod web;
 
-use crate::support::iroh::build_endpoint;
+use crate::support::iroh::{build_endpoint, STUN_QUIC_ALPN};
 use crate::support::TokioIo;
 use crate::tunnel::handle_proxy_request;
 use crate::web::handle_web_request;
@@ -44,7 +44,7 @@ async fn main() -> Result<()> {
 
     let handler = Box::new(ProxyHandler);
     let _router = Router::builder(endpoint)
-        .accept("stun-proxy".as_bytes(), handler)
+        .accept(STUN_QUIC_ALPN.as_bytes(), handler)
         .spawn();
 
 

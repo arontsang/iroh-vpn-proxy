@@ -21,3 +21,6 @@ pub async fn build_endpoint() -> anyhow::Result<Endpoint> {
 
     Ok(endpoint)
 }
+
+pub const STUN_QUIC_ALPN: &'static str = "stun-quic";
+

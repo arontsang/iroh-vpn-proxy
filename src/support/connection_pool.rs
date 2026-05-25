@@ -1,5 +1,5 @@
 use crate::support::get_value_from_env;
-use crate::support::iroh::build_endpoint;
+use crate::support::iroh::{build_endpoint, STUN_QUIC_ALPN};
 use async_executor::LocalExecutor;
 use iroh::endpoint::{Connection, OpenBi};
 use iroh::Endpoint;
@@ -53,7 +53,7 @@ impl<'a> IrohConnectionPool<'a> {
 
         let endpoint = build_endpoint().await?;
         let ticket = EndpointTicket::from_str(&ticket)?;
-        let connection = endpoint.connect(ticket, "stun-proxy".as_bytes()).await?;
+        let connection = endpoint.connect(ticket, STUN_QUIC_ALPN.as_bytes()).await?;
         println!("connected to server {}", server_base);
         
         let uplink = Rc::new(Uplink { connection, _endpoint: endpoint });
