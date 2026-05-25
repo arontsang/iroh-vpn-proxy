@@ -6,12 +6,14 @@ This is a lightweight project that is designed to be deployed to Azure's FAAS in
 with a on-demand scale to zero VPN/HTTP Proxy for use with circumventing geolocation and political firewall
 restrictions, with minimal cost (scale to zero).
 
-The project comes in two parts. A FAAS binary that is deployed to Azure's Functions. This must be configured
-to dial back to the user's router (which should be running wireguard).
+The project comes in two parts. A FAAS binary that is deployed to Azure's Functions. This allows clients to
+dial in using HTTP to get a Iroh ticket, which allows the creation of a Quic connection behind a NAT.
 
-The second part of the project is a tiny daemon that runs on the user's network, and intercepts the HTTP proxy
-requests, forwards the request to the Azure Function (over the Wireguard tunnel) whilst also calling a keep alive
-endpoint on the Azure functions trigger.
+As Iroh is underpinned by QUIC, this tunnel is TLS encrypted, and can be used to
+bypass georestrictions or country-specific firewalls.
+
+As long as the FAAS infrastructure allows a HTTP request in, we can get the Iroh
+ticket to connect to the exit server from the entry node.
 
 ## How this works
 
@@ -60,8 +62,3 @@ Originally this project used a userland TCP/IP stack and wireguard for tunneling
 I found that I quickly hit a performance bottleneck between the TCP/IP stack and the UDP socket, which I could not 
 solve easily.
 
-As long as the FAAS infrastructure allows a HTTP request in, we can get the Iroh
-ticket to connect to the exit server from the entry node.
-
-As Iroh is underpinned by QUIC, this tunnel is TLS encrypted, and can be used to
-bypass georestrictions or country-specific firewalls.
