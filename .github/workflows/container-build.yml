@@ -39,12 +39,23 @@ jobs:
           fi
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
-      - name: Build and push
+      - name: Build and cache dependencies
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: false
+          target: dependencies-compiler
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push server
         uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
+          target: compiler
           build-args: |
             TARGET_BIN=server
           tags: |
@@ -54,12 +65,13 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Build and push
+      - name: Build and push client
         uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
+          target: compiler
           build-args: |
             TARGET_BIN=client
           tags: |
