@@ -28,5 +28,6 @@ iroh-tickets = "0.5.0"
 iroh-services = "0.14.0"
 pin-project = "1.1.13"
 async-executor = "1.14.0"
+socket2 = "0.6.3"
 
 

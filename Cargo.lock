@@ -3762,6 +3762,7 @@ dependencies = [
  "pin-project-lite",
  "reqwest",
  "serde",
+ "socket2",
  "tokio",
 ]
 

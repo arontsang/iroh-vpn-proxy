@@ -26,15 +26,14 @@ async fn handle_incoming(mut incoming: TcpStream, pool: Rc<IrohConnectionPool<'_
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     let local_ex = Rc::new(LocalExecutor::new());
-    let socket = SocketAddr::from(([0, 0, 0, 0], get_value_from_env::<u16>("PROXY_PORT").unwrap_or(0)));
-    let socket = TcpListener::bind(socket).await?;
+    let listener = open_tcp_listener()?;
 
     let pool = Rc::new(IrohConnectionPool::new(local_ex.clone()));
 
     local_ex.run(async {
         loop {
             let local_ex = local_ex.clone();
-            if let Ok((incoming, _)) = socket.accept().await {
+            if let Ok((incoming, _)) = listener.accept().await {
                 let pool = pool.clone();
 
                 local_ex.spawn(async move {
@@ -46,5 +45,31 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+fn open_tcp_listener() -> Result<TcpListener> {
+    // We want to use SO_REUSE because we can then
+    // set host networking true on the kubernetes
+    // deployment without fear of deployment rollouts
+
+    // We want host networking to get around Calico's
+    // Symmetric NAT.
+    // By using host networking, we can get iroh
+    // to UDP NAT holepunch for better performance
+    // and reliablity.
+
+    let addr = SocketAddr::from(([0, 0, 0, 0], get_value_from_env::<u16>("PROXY_PORT").unwrap_or(0)));
+    let domain = socket2::Domain::for_address(addr);
+    let socket = socket2::Socket::new(domain, socket2::Type::STREAM, None)?;
+
+    #[cfg(unix)]
+    socket.set_reuse_port(true)?;
+    socket.set_reuse_address(true)?;
+
+    socket.bind(&addr.into())?;
+    socket.listen(1024)?;
+
+    socket.set_nonblocking(true)?;
+    let listener = std::net::TcpListener::from(socket);
+    Ok(TcpListener::from_std(listener)?)
+}
 
 
