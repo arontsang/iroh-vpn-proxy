@@ -9,11 +9,11 @@ use std::time::Duration;
 
 #[derive(Clone)]
 struct AppState {
-    ticket: Arc<EndpointTicket>
+    router: Arc<iroh::protocol::Router>
 }
 
-pub async fn handle_web_request(ticket: Arc<EndpointTicket>) -> anyhow::Result<()> {
-    let state = AppState { ticket };
+pub async fn handle_web_request(router: Arc<iroh::protocol::Router>) -> anyhow::Result<()> {
+    let state = AppState { router };
 
     let app = Router::new()
         .route("/keep_alive", get(keep_alive))
@@ -28,7 +28,9 @@ pub async fn handle_web_request(ticket: Arc<EndpointTicket>) -> anyhow::Result<(
 
 
 async fn get_ticket(State(state): State<AppState>) -> String {
-    state.ticket.to_string()
+    let endpoint = state.router.endpoint();
+    let ticket = EndpointTicket::new(endpoint.addr());
+    ticket.to_string()
 }
 
 #[derive(Deserialize)]

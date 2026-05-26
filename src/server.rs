@@ -9,7 +9,6 @@ use crate::web::handle_web_request;
 use anyhow::Result;
 use iroh::endpoint::Connection;
 use iroh::protocol::{AcceptError,  ProtocolHandler, Router};
-use iroh_tickets::endpoint::EndpointTicket;
 use std::env;
 use std::sync::Arc;
 
@@ -40,16 +39,14 @@ async fn main() -> Result<()> {
         }
     };
 
-    let ticket = EndpointTicket::new(endpoint.addr());
 
     let handler = Box::new(ProxyHandler);
-    let _router = Router::builder(endpoint)
+    let router = Router::builder(endpoint)
         .accept(STUN_QUIC_ALPN.as_bytes(), handler)
         .spawn();
 
-
     tokio::select! {
-        _ = handle_web_request(Arc::new(ticket.into())) => {},
+        _ = handle_web_request(Arc::new(router)) => {},
         _ = tokio::signal::ctrl_c() => {}
     }
 
