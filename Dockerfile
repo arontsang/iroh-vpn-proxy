@@ -14,8 +14,8 @@ RUN case "$TARGETPLATFORM" in \
       *)              echo "x86_64-unknown-linux-musl" > /tmp/target ;; \
     esac && \
     rustup target add "$(cat /tmp/target)"
-RUN --mount=type=cache,target=/root/.cargo/registry \
-    --mount=type=cache,target=/app/target \
+RUN --mount=type=cache,target=/root/.cargo/registry,id=registry-$TARGETPLATFORM \
+    --mount=type=cache,target=/app/target,id=compile-$TARGETPLATFORM \
     RUST_TARGET=$(cat /tmp/target) && \
     cargo zigbuild --release --target "$RUST_TARGET" --bin hello
 
@@ -23,13 +23,13 @@ FROM dependencies-compiler AS compiler
 
 COPY src/ src/
 
-RUN --mount=type=cache,target=/root/.cargo/registry \
-    --mount=type=cache,target=/app/target \
+RUN --mount=type=cache,target=/root/.cargo/registry,id=registry-$TARGETPLATFORM \
+    --mount=type=cache,target=/app/target,id=compile-$TARGETPLATFORM \
     RUST_TARGET=$(cat /tmp/target) && \
     touch src/$TARGET_BIN.rs &&\
     cargo zigbuild --release --target "$RUST_TARGET"
-RUN --mount=type=cache,target=/root/.cargo/registry \
-    --mount=type=cache,target=/app/target \
+RUN --mount=type=cache,target=/root/.cargo/registry,id=registry-$TARGETPLATFORM \
+    --mount=type=cache,target=/app/target,id=compile-$TARGETPLATFORM \
     RUST_TARGET=$(cat /tmp/target) && \
     mkdir /dist && \
     cp /app/target/$RUST_TARGET/release/client /app/target/$RUST_TARGET/release/server /dist
