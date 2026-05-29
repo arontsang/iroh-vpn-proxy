@@ -35,7 +35,7 @@ RUN --mount=type=cache,target=/root/.cargo/registry \
     cp /app/target/$RUST_TARGET/release/client /app/target/$RUST_TARGET/release/server /dist
 
 ARG TARGETPLATFORM
-FROM --platform=$TARGETPLATFORM alpine:latest
+FROM alpine:latest
 ARG TARGET_BIN=server
 
 COPY --from=compiler /dist/$TARGET_BIN /opt/app/bin
