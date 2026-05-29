@@ -1,8 +1,7 @@
 
 use std::{
     pin::Pin,
-    task::{Context, Poll}
-    ,
+    task::{Context, Poll},
 };
 
 use pin_project_lite::pin_project;

@@ -1,7 +1,7 @@
 use crate::support::get_value_from_env;
 use crate::support::iroh::{build_endpoint, STUN_QUIC_ALPN};
 use async_executor::LocalExecutor;
-use iroh::endpoint::{ConnectError, Connection, OpenBi};
+use iroh::endpoint::{Connection, OpenBi};
 use iroh::Endpoint;
 use iroh_tickets::endpoint::EndpointTicket;
 use std::cell::RefCell;
