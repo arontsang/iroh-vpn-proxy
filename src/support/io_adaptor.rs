@@ -4,14 +4,14 @@ use std::{
     task::{Context, Poll},
 };
 
-use pin_project_lite::pin_project;
+use pin_project::pin_project;
 
-pin_project! {
-    #[derive(Debug)]
-    pub struct TokioIo<T> {
-        #[pin]
-        inner: T,
-    }
+
+#[pin_project]
+#[derive(Debug)]
+pub struct TokioIo<T> {
+    #[pin]
+    inner: T,
 }
 
 
