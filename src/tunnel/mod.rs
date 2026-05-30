@@ -9,9 +9,10 @@ use hyper::{Method, Request, Response};
 use hyper::rt::{Read, Write};
 use tokio::net::TcpStream;
 
-use crate::support::{get_value_from_env, TokioIo};
+pub use crate::support::get_value_from_env;
 
-
+pub mod io_adaptor;
+use crate::tunnel::io_adaptor::TokioIo;
 
 pub fn handle_proxy_request<TRequest>(request: TRequest)
 where TRequest : Read + Write + Unpin + Send + 'static {

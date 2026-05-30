@@ -3,7 +3,6 @@ pub mod tunnel;
 mod web;
 
 use crate::support::iroh::{build_endpoint, STUN_QUIC_ALPN};
-use crate::support::TokioIo;
 use crate::tunnel::handle_proxy_request;
 use crate::web::handle_web_request;
 use anyhow::Result;
@@ -11,6 +10,7 @@ use iroh::endpoint::Connection;
 use iroh::protocol::{AcceptError,  ProtocolHandler, Router};
 use std::env;
 use std::sync::Arc;
+use crate::tunnel::io_adaptor::TokioIo;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
