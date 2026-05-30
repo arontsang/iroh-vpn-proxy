@@ -1,7 +1,6 @@
 pub mod support;
 pub mod tunnel;
 mod web;
-
 use crate::support::iroh::{build_endpoint, STUN_QUIC_ALPN};
 use crate::tunnel::handle_proxy_request;
 use crate::web::handle_web_request;
