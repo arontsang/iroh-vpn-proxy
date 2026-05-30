@@ -38,7 +38,20 @@ jobs:
             TAG="${{ github.ref_name }}"
           fi
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
+      - name: Cache
+        uses: actions/cache@v4
+        id: cache
+        with:
+          path: cache-mount
+          key: cache-mount-${{ hashFiles('Dockerfile') }}
 
+      - name: Restore Docker cache mounts
+        uses: reproducible-containers/buildkit-cache-dance@v3
+        with:
+          builder: ${{ steps.setup-buildx.outputs.name }}
+          cache-dir: cache-mount
+          dockerfile: Dockerfile
+          skip-extraction: ${{ steps.cache.outputs.cache-hit }}
       - name: Build and push
         uses: docker/build-push-action@v7
         with:
