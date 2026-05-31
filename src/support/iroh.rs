@@ -14,6 +14,20 @@ fn get_congestion_controller() -> Arc<dyn ControllerFactory + Send + Sync + 'sta
     Arc::new(ret)
 }
 
+fn add_port_forwards(mut endpoint: Endpoint) -> Endpoint {
+    if let Some(foo) = get_value_from_env::<String>("QUIC_EXTERNAL_ADDRESS"){
+        for let addr in foo.split(',') {
+            if let Ok(addresses) = tokio::net::look_up_host(addr){
+                for let addr in addresses {
+                    endpoint.add_external_addr(addr);
+                }
+            }
+        }
+    }
+
+    endpoint
+}
+
 pub async fn build_endpoint() -> anyhow::Result<Endpoint> {
     let mut quic_config = QuicTransportConfig::builder();
     quic_config = quic_config.congestion_controller_factory(get_congestion_controller());
