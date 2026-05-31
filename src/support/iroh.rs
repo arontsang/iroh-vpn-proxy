@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use iroh::Endpoint;
+use iroh::{Endpoint, endpoint};
 use iroh::endpoint::{presets, QuicTransportConfig};
 use noq_proto::congestion::{BbrConfig, ControllerFactory};
 use crate::support::get_value_from_env;
@@ -12,6 +12,20 @@ fn get_congestion_controller() -> Arc<dyn ControllerFactory + Send + Sync + 'sta
     }
 
     Arc::new(ret)
+}
+
+async fn add_port_forwards(mut endpoint: endpoint::Builder) -> endpoint::Builder {
+    if let Some(foo) = get_value_from_env::<String>("QUIC_EXTERNAL_ADDRESS"){
+        for addr in foo.split(',') {
+            if let Ok(addresses) = tokio::net::lookup_host(addr).await{
+                for addr in addresses {
+                    endpoint = endpoint.external_addr(addr);
+                }
+            }
+        }
+    }
+
+    endpoint
 }
 
 pub async fn build_endpoint() -> anyhow::Result<Endpoint> {
@@ -37,6 +51,8 @@ pub async fn build_endpoint() -> anyhow::Result<Endpoint> {
     if let Some(bind_addr) = get_value_from_env::<String>("BIND_ADDR") {
         endpoint = endpoint.bind_addr(bind_addr)?;
     }
+
+    endpoint = add_port_forwards(endpoint).await;
 
     let endpoint = endpoint
         .bind()
