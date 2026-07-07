@@ -7,7 +7,9 @@ use hyper::service::service_fn;
 use hyper::upgrade::Upgraded;
 use hyper::{Method, Request, Response};
 use hyper::rt::{Read, Write};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
+use tokio::time::{self, Duration};
 
 pub use crate::support::get_value_from_env;
 
@@ -106,20 +108,59 @@ fn full<T: Into<Bytes>>(chunk: T) -> BoxBody<Bytes, hyper::Error> {
         .boxed()
 }
 
-// Create a TCP connection to host:port, build a tunnel between the connection and
-// the upgraded connection
 async fn tunnel(upgraded: Upgraded, addr: String) -> std::io::Result<()> {
     // Connect to remote server
     println!("opening tunnel to {addr}");
     let mut server = TcpStream::connect(addr).await?;
     server.set_nodelay(true)?;
-    let mut upgraded = TokioIo::new(upgraded);
+    let upgraded = TokioIo::new(upgraded);
 
     let buffer_size: usize = get_value_from_env("PROXY_BUFFER_SIZE").unwrap_or(8 * 1024);
+    let idle_timeout_secs: u64 = get_value_from_env("PROXY_IDLE_TIMEOUT_SECS").unwrap_or(30);
+    let idle = Duration::from_secs(idle_timeout_secs);
 
-    // Proxying data
-    let (_, _) =
-        tokio::io::copy_bidirectional_with_sizes(&mut upgraded, &mut server, buffer_size, buffer_size).await?;
+    let (ur, uw) = tokio::io::split(upgraded);
+    let (sr, sw) = tokio::io::split(server);
+
+    let a = copy_idle(ur, sw, buffer_size, idle);
+    let b = copy_idle(sr, uw, buffer_size, idle);
+
+    tokio::select! {
+        r = a => { r?; }
+        r = b => { r?; }
+    }
 
     Ok(())
 }
+
+async fn copy_idle<R, W>(
+    mut reader: R,
+    mut writer: W,
+    buffer_size: usize,
+    idle_timeout: Duration,
+) -> std::io::Result<u64>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+{
+    let mut buf = vec![0u8; buffer_size];
+    let mut total = 0u64;
+    loop {
+        let n = match time::timeout(idle_timeout, reader.read(&mut buf)).await {
+            Ok(Ok(0)) => break,
+            Ok(Ok(n)) => n,
+            Ok(Err(e)) => return Err(e),
+            Err(_elapsed) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "idle timeout",
+                ));
+            }
+        };
+        total += n as u64;
+        writer.write_all(&buf[..n]).await?;
+    }
+    writer.shutdown().await?;
+    Ok(total)
+}
+
