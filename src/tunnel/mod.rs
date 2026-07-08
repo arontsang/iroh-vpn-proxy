@@ -110,6 +110,7 @@ fn full<T: Into<Bytes>>(chunk: T) -> BoxBody<Bytes, hyper::Error> {
 // the upgraded connection
 async fn tunnel(upgraded: Upgraded, addr: String) -> std::io::Result<()> {
     // Connect to remote server
+    println!("opening tunnel to {addr}");
     let mut server = TcpStream::connect(addr).await?;
     server.set_nodelay(true)?;
     let mut upgraded = TokioIo::new(upgraded);
