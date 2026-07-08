@@ -111,7 +111,7 @@ fn full<T: Into<Bytes>>(chunk: T) -> BoxBody<Bytes, hyper::Error> {
 async fn tunnel(upgraded: Upgraded, addr: String) -> std::io::Result<()> {
     // Connect to remote server
     println!("opening tunnel to {addr}");
-    let mut server = TcpStream::connect(addr).await?;
+    let mut server = TcpStream::connect(addr.as_str()).await?;
     server.set_nodelay(true)?;
     let upgraded = TokioIo::new(upgraded);
 
@@ -125,12 +125,24 @@ async fn tunnel(upgraded: Upgraded, addr: String) -> std::io::Result<()> {
     let a = copy_idle(ur, sw, buffer_size, idle);
     let b = copy_idle(sr, uw, buffer_size, idle);
 
-    tokio::select! {
-        r = a => { r?; }
-        r = b => { r?; }
-    }
+    let conn_timeout = Duration::from_secs(5 * 60);
 
-    Ok(())
+    match time::timeout(conn_timeout, async {
+        tokio::select! {
+            r = a => { r?; }
+            r = b => { r?; }
+        }
+        Ok(())
+    })
+    .await
+    {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(e)) => return Err(e),
+        Err(_elapsed) => {
+            eprintln!("tunnel to {addr}: connection timeout after 5 minutes");
+            Ok(())
+        }
+    }
 }
 
 async fn copy_idle<R, W>(
