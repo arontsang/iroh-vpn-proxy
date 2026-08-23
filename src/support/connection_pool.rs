@@ -52,6 +52,7 @@ impl<'a> IrohConnectionPool<'a> {
     }
 
     async fn build_new_connection(&self) -> anyhow::Result<Rc<Uplink>> {
+        println!("Building new connection");
         let server_base = std::env::var("SERVER_ADDR")?;
         let ticket = reqwest::get(&format!("{}/iroh/ticket", server_base)).await?
             .text()
