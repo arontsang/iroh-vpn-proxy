@@ -33,7 +33,8 @@ async fn main() -> Result<()> {
     local_ex.run(async {
         loop {
             let local_ex = local_ex.clone();
-            if let Ok((incoming, _)) = listener.accept().await {
+            if let Ok((incoming, client_addr)) = listener.accept().await {                
+                println!("Incoming connection from {}", client_addr);
                 let pool = pool.clone();
 
                 local_ex.spawn(async move {
