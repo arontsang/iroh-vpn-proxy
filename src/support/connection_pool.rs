@@ -20,6 +20,12 @@ impl Uplink {
     }
 }
 
+impl Drop for Uplink {
+    fn drop(&mut self) {
+        println!("Dropping uplink")
+    }
+}
+
 pub struct IrohConnectionPool<'a> {
     pool_item: RefCell<Weak<Uplink>>,
     creation_lock: tokio::sync::Mutex<()>,
@@ -57,12 +63,14 @@ impl<'a> IrohConnectionPool<'a> {
         let ticket = reqwest::get(&format!("{}/iroh/ticket", server_base)).await?
             .text()
             .await?;
-
+        println!("Got IROH ticket {}", ticket);
 
         let endpoint = build_endpoint().await?;
+        println!("Built endpoint {}", endpoint.id());
         let ticket = EndpointTicket::from_str(&ticket)?;
         let connection = endpoint.connect(ticket, STUN_QUIC_ALPN.as_bytes()).await;
 
+        println!("Begin connecting...");
         let connection = match connection {
             Ok(x) => { x }
             Err(err) => {
