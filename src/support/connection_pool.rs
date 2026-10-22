@@ -27,6 +27,7 @@ impl Drop for Uplink {
 }
 
 pub struct IrohConnectionPool<'a> {
+    client: reqwest::Client,
     pool_item: RefCell<Weak<Uplink>>,
     creation_lock: tokio::sync::Mutex<()>,
     pub local_executor: Rc<LocalExecutor<'a>>,
@@ -38,6 +39,7 @@ impl<'a> IrohConnectionPool<'a> {
     
     pub fn new(local_executor: Rc<LocalExecutor<'a>>) -> Self {
         Self {
+            client: reqwest::Client::default(),
             pool_item: RefCell::new(Weak::default()),
             creation_lock: Default::default(),
             local_executor
@@ -57,12 +59,19 @@ impl<'a> IrohConnectionPool<'a> {
         }
     }
 
+    async fn get_ticket(&self, server_base: &String) -> anyhow::Result<String> {
+        let request = self.client.get(&format!("{}/iroh/ticket", server_base))
+            .header("Cache-Control", "no-cache, no-store, must-revalidate")
+            .header("Pragma", "no-cache")
+            .header("Expires", "0")
+            .send().await?;
+        Ok(request.text().await?)
+    }
+
     async fn build_new_connection(&self) -> anyhow::Result<Rc<Uplink>> {
         println!("Building new connection");
         let server_base = std::env::var("SERVER_ADDR")?;
-        let ticket = reqwest::get(&format!("{}/iroh/ticket", server_base)).await?
-            .text()
-            .await?;
+        let ticket = self.get_ticket(&server_base).await?;
         println!("Got IROH ticket {}", ticket);
 
         let endpoint = build_endpoint().await?;
