@@ -1,8 +1,8 @@
 use crate::support::get_value_from_env;
-use crate::support::iroh::{build_endpoint, STUN_QUIC_ALPN};
+use crate::support::iroh::{STUN_QUIC_ALPN, build_endpoint};
 use async_executor::LocalExecutor;
-use iroh::endpoint::{Connection, OpenBi};
 use iroh::Endpoint;
+use iroh::endpoint::{Connection, OpenBi};
 use iroh_tickets::endpoint::EndpointTicket;
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
@@ -65,6 +65,30 @@ impl<'a> IrohConnectionPool<'a> {
             .header("Pragma", "no-cache")
             .header("Expires", "0")
             .send().await?;
+        let request = match request.error_for_status() {
+            Ok(request) => Ok(request),
+            Err(e) => {
+                // Error handling stolen from AI
+                if e.is_builder()       { println!("Failed to build the client or request."); }
+                if e.is_request()       { println!("Failed to send the request."); }
+                if e.is_body()          { println!("Error with request or response body."); }
+                if e.is_decode()        { println!("Failed to deserialize the response body."); }
+                if e.is_redirect()      { println!("Error following standard HTTP redirects."); }
+                if e.is_timeout()       { println!("The request timed out."); }
+
+                // Check if the error was triggered by an HTTP status code (e.g. res.error_for_status())
+                if let Some(status) = e.status() {
+                    println!("HTTP Status Error code: {}", status);
+                }
+
+                // Retrieve the URL related to this error if present
+                if let Some(url) = e.url() {
+                    println!("Error occurred while visiting: {}", url);
+                }
+                Err(e)
+            }
+        }?;
+
         Ok(request.text().await?)
     }
 
