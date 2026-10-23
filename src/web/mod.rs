@@ -20,7 +20,9 @@ pub async fn handle_web_request(router: Arc<iroh::protocol::Router>) -> anyhow::
         .route("/iroh/ticket", get(get_ticket))
         .with_state(state);
 
-    let port = get_value_from_env("HTTP_PORT").unwrap_or(8080u16);
+    let port = get_value_from_env("HTTP_PORT")
+        .or(get_value_from_env("FUNCTIONS_CUSTOMHANDLER_PORT"))
+        .unwrap_or(8080u16);
     let listener = tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port))).await?;
 
     Ok(axum::serve(listener, app).await?)

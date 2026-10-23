@@ -9,6 +9,16 @@ restrictions, with minimal cost (scale to zero).
 The project comes in two parts. A FAAS binary that is deployed to Azure's Functions. This allows clients to
 dial in using HTTP to get a Iroh ticket, which allows the creation of a Quic connection behind a NAT.
 
+## Azure Function packaging
+
+To build the server binary and generate a deployable Azure Function zip package, run:
+
+```bash
+./scripts/build-azure-function.sh
+```
+
+This writes the zip file to `dist/iroh-vpn-proxy-function-app.zip` and includes the compiled `server` binary plus Azure Function metadata for the exposed GET endpoints: `/iroh/ticket` and `/keep_alive`.
+
 As Iroh is underpinned by QUIC, this tunnel is TLS encrypted, and can be used to
 bypass georestrictions or country-specific firewalls.
 
