@@ -12,11 +12,19 @@ jobs:
   build-function-app:
     runs-on: ubuntu-latest
     permissions:
+      id-token: write
       contents: read
 
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -35,3 +43,5 @@ jobs:
           app-name: ${{ secrets.AZURE_FUNCTIONAPP_NAME }}
           package: dist/iroh-vpn-proxy-function-app.zip
           publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
+          sku: 'flexconsumption'
+          remote-build: true
