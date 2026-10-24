@@ -9,6 +9,7 @@ use std::net::SocketAddr;
 use std::rc::Rc;
 use tokio::io::copy_bidirectional;
 use tokio::net::{TcpListener, TcpStream};
+use tokio::time::{self, Duration};
 
 
 async fn handle_incoming(mut incoming: TcpStream, pool: Rc<IrohConnectionPool<'_>>) -> Result<()> {
@@ -17,9 +18,17 @@ async fn handle_incoming(mut incoming: TcpStream, pool: Rc<IrohConnectionPool<'_
 
     let mut upstream = tokio::io::join(recv, send);
 
-    copy_bidirectional(&mut upstream, &mut incoming).await?;
+    let incoming_addr = incoming.peer_addr()?.to_string();
+    let conn_timeout = Duration::from_secs(5 * 60);
 
-    Ok(())
+    match time::timeout(conn_timeout, copy_bidirectional(&mut upstream, &mut incoming)).await {
+        Ok(Ok(_)) => Ok(()),
+        Ok(Err(e)) => Err(e.into()),
+        Err(_elapsed) => {
+            eprintln!("incoming connection from {incoming_addr}: connection timeout after 5 minutes");
+            Ok(())
+        }
+    }
 }
 
 
