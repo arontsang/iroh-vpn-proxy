@@ -44,4 +44,4 @@ jobs:
           package: dist/iroh-vpn-proxy-function-app.zip
           publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
           sku: 'flexconsumption'
-          remote-build: true
+          remote-build: false
