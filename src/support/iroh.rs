@@ -1,12 +1,12 @@
 use std::sync::Arc;
 use iroh::{Endpoint, endpoint};
 use iroh::endpoint::{presets, QuicTransportConfig};
-use noq_proto::congestion::{BbrConfig, ControllerFactory};
+use noq_proto::congestion::{Bbr3Config, ControllerFactory};
 use crate::support::get_value_from_env;
 
 
 fn get_congestion_controller() -> Arc<dyn ControllerFactory + Send + Sync + 'static> {
-    let mut ret = BbrConfig::default();
+    let mut ret = Bbr3Config::default();
     if let Some(value) = get_value_from_env("QUIC_BBR_INITIAL_WINDOW") {
         ret.initial_window(value);
     }
