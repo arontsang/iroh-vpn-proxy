@@ -1,6 +1,6 @@
 use crate::support::get_value_from_env;
 use crate::support::iroh::{STUN_QUIC_ALPN, build_endpoint};
-use async_executor::LocalExecutor;
+use async_executor::{LocalExecutor, Task};
 use iroh::Endpoint;
 use iroh::endpoint::{Connection, OpenBi};
 use iroh_tickets::endpoint::EndpointTicket;
@@ -13,7 +13,8 @@ use lazy_static::lazy_static;
 pub struct Uplink {
     pub connection: Connection,
     _endpoint: Endpoint,
-    alive: Cell<bool>
+    alive: Cell<bool>,
+    _keep_alive: Task<()>
 }
 
 impl Uplink {
@@ -127,65 +128,16 @@ impl<'a> IrohConnectionPool<'a> {
         };
 
         println!("connected to server {}", server_base);
-
-        let uplink = Rc::new(Uplink { connection, _endpoint: endpoint, alive: Cell::new(true) });
-
-        self.pool_item.replace(Rc::downgrade(&uplink.clone()));
-
-        let keep_alive = self.local_executor.spawn({
-            let weak = Rc::downgrade(&uplink);
-            async move {
-                let server_base = server_base;
-                //loop {
-                    // Continuously ping the server to keep the connection alive.
-                    println!("Calling GET /keep_alive");
-                    reqwest::get(&format!("{}/keep_alive?time_out_secs=300", &server_base)).await.ok();
-                    tokio::time::sleep(Duration::from_secs(5)).await;
-
-                    // Mark as old, and force recreate connection.
-                    if let Some(uplink) = weak.upgrade() {
-                        uplink.alive.set(false);
-                    }
-
-                    // // Ensure ticket matches
-                    // if let Ok(ticket) = get_ticket(&server_base).await {
-                    //     if let Some(uplink) = weak.upgrade() && uplink.alive {
-                    //         if uplink.endpoint.id() != ticket.endpoint_addr().id {
-                    //             uplink.alive = false;
-                    //             break;
-                    //         }
-                    //     } else {
-                    //         break
-                    //     }
-                    // }
-                //}
+        let keep_alive = self.local_executor.spawn(async move {
+            loop {
+                println!("Calling GET /keep_alive");
+                reqwest::get(&format!("{}/keep_alive?time_out_secs=300", &server_base)).await.ok();
+                tokio::time::sleep(Duration::from_secs(5)).await;
             }
         });
+        let uplink = Rc::new(Uplink { connection, _endpoint: endpoint, alive: Cell::new(true), _keep_alive: keep_alive });
 
-
-        self.local_executor.spawn({
-            let uplink = uplink.clone();
-            let keep_alive = keep_alive;
-            let linger = get_value_from_env("LINGER_SECS").unwrap_or(10u16);
-            async move {
-                let mut dead_count = 0u16;
-                while dead_count < linger {
-                    // Check every 1 second if we hold the last reference to the connection.
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-
-                    if Rc::strong_count(&uplink) == 1 {
-                        dead_count += 1;
-                    } else {
-                        dead_count = 0;
-                    }
-                }
-
-                println!("Closing connection after {} seconds of inactivity", linger);
-                // We are the last reference, close the connection.
-                drop(uplink);
-                drop(keep_alive)
-            }
-        }).detach();
+        self.pool_item.replace(Rc::downgrade(&uplink.clone()));
         Ok(uplink)
     }
 }
