@@ -37,11 +37,11 @@ jobs:
         with:
           name: iroh-vpn-proxy-function-app
           path: dist/iroh-vpn-proxy-function-app.zip
-      - name: Deploy to Azure Functions
-        uses: azure/functions-action@v1
-        with:
-          app-name: ${{ secrets.AZURE_FUNCTIONAPP_NAME }}
-          package: dist/iroh-vpn-proxy-function-app.zip
-          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
-          sku: 'flexconsumption'
-          remote-build: false
+#      - name: Deploy to Azure Functions
+#        uses: azure/functions-action@v1
+#        with:
+#          app-name: ${{ secrets.AZURE_FUNCTIONAPP_NAME }}
+#          package: dist/iroh-vpn-proxy-function-app.zip
+#          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
+#          sku: 'flexconsumption'
+#          remote-build: false
