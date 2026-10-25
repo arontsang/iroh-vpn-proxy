@@ -1,13 +1,8 @@
 use crate::support::get_value_from_env;
-use async_stream::stream;
-use axum::body::Body;
-use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Router, extract::{Query, State}};
-use bytes::Bytes;
 use iroh_tickets::endpoint::EndpointTicket;
 use serde::Deserialize;
-use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -45,17 +40,7 @@ struct KeepAliveRequest {
     pub time_out_secs: u16
 }
 
-static HELLO_BYTES: &[u8] = &[0u8; 1];
-async fn keep_alive(Query(query): Query<KeepAliveRequest>) -> impl IntoResponse {
-    let timeout = query.time_out_secs / 10;
-
-    let stream = stream! {
-        for _ in 0..timeout {
-            yield Ok::<_, Infallible>(Bytes::from(HELLO_BYTES));
-            tokio::time::sleep(Duration::from_secs(10)).await;
-        }
-    };
-    Body::from_stream(stream)
+async fn keep_alive(Query(query): Query<KeepAliveRequest>) -> () {
+    let timeout = query.time_out_secs as u64;
+    tokio::time::sleep(Duration::from_secs(timeout)).await;
 }
-
-
