@@ -75,15 +75,16 @@ cat > "${DIST_DIR}/KeepAlive/function.json" <<EOF
     },
     {
       "type": "http",
-      "direction": "out",
+      "direction": "out"
       "name": "res"
     }
   ]
 }
 EOF
 
+
 cargo build --release --bin "${BINARY_NAME}" --target x86_64-unknown-linux-musl
-cp "${ROOT_DIR}/target/x86_64-unknown-linux-musl/release/${BINARY_NAME}" "${DIST_DIR}/${BINARY_NAME}"
+upx -9 "${ROOT_DIR}/target/x86_64-unknown-linux-musl/release/${BINARY_NAME}" -o "${DIST_DIR}/${BINARY_NAME}" --force-overwrite
 
 
 rm -f "${ZIP_PATH}"

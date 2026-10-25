@@ -25,7 +25,10 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools upx
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -33,6 +36,8 @@ jobs:
 
       - name: Build server and package Azure Function zip
         run: bash ./scripts/build-azure-function.sh
+        env:
+          CC_x86_64_unknown_linux_musl: musl-gcc
 
       - name: Upload Azure Function artifact
         uses: actions/upload-artifact@v4
