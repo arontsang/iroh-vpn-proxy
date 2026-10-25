@@ -8,7 +8,6 @@ BINARY_NAME="server"
 
 mkdir -p "${DIST_DIR}/IrohTicket" "${DIST_DIR}/KeepAlive"
 
-cargo build --release --bin "${BINARY_NAME}"
 
 cat > "${DIST_DIR}/host.json" <<EOF
 {
@@ -40,7 +39,6 @@ cat > "${DIST_DIR}/host.json" <<EOF
   }
 }
 EOF
-cp "${ROOT_DIR}/target/release/${BINARY_NAME}" "${DIST_DIR}/${BINARY_NAME}"
 
 cat > "${DIST_DIR}/IrohTicket/function.json" <<EOF
 {
@@ -84,6 +82,8 @@ cat > "${DIST_DIR}/KeepAlive/function.json" <<EOF
 }
 EOF
 
+cargo build --release --bin "${BINARY_NAME}" --target x86_64-unknown-linux-musl
+cp "${ROOT_DIR}/target/x86_64-unknown-linux-musl/release/${BINARY_NAME}" "${DIST_DIR}/${BINARY_NAME}"
 
 
 rm -f "${ZIP_PATH}"

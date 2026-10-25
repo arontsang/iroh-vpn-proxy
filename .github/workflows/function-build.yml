@@ -28,6 +28,8 @@ jobs:
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
 
       - name: Build server and package Azure Function zip
         run: bash ./scripts/build-azure-function.sh
