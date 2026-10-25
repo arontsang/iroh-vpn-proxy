@@ -1,4 +1,3 @@
-use crate::support::get_value_from_env;
 use crate::support::iroh::{STUN_QUIC_ALPN, build_endpoint};
 use async_executor::{LocalExecutor, Task};
 use iroh::Endpoint;
