@@ -33,8 +33,8 @@ tokio = { version = "1.54.1", features = ["io-util", "macros", "rt", "signal"] }
 axum = { version = "0.8.9", features = ["macros"] }
 serde = { version = "1.0.229", features = ["derive"] }
 reqwest = { version = "0.13.5", default-features = false, features = ["default-tls"] }
-iroh = "1.4.1"
-iroh-metrics = "1.0.2"
+iroh = "1.5.0"
+iroh-metrics = "1.0.3"
 iroh-tickets = "1.0.0"
 iroh-services = "2.0.0"
 pin-project = "1.1.13"
